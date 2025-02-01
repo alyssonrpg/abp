@@ -1,0 +1,106 @@
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Volo.Abp.Testing;
+using Xunit;
+
+namespace Volo.Abp.Autofac;
+
+public class AutoFac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
+{
+    private readonly ManualResetEventSlim _optionsAContinueEvent = new ();
+
+    private readonly ManualResetEventSlim _optionsAReadyToContinueEvent = new ();
+
+    private readonly ManualResetEventSlim _optionsBEvent = new ();
+
+    public AutoFac_Dead_Lock_Tests()
+    {
+
+    }
+
+    protected override void SetAbpApplicationCreationOptions(AbpApplicationCreationOptions options)
+    {
+        options.UseAutofac();
+    }
+
+    protected override void AfterAddApplication(IServiceCollection services)
+    {
+        base.AfterAddApplication(services);
+
+        services.AddSingleton<SingletonTestService, SingletonTestService>();
+
+        services.AddOptions<OptionsA>()
+            .Configure<IServiceProvider>((optionsA, rootServiceProvider) =>
+            {
+                var optionsB = rootServiceProvider.GetRequiredService<IOptions<OptionsB>>();
+
+                _optionsAReadyToContinueEvent.Set();
+                _optionsAContinueEvent.Wait();
+
+                optionsA.OptionsB = optionsB.Value;
+            });
+
+        services.AddOptions<OptionsB>()
+            .Configure<IServiceProvider>((optionsB, rootServiceProvider) =>
+            {
+                _optionsBEvent.Set();
+                optionsB.OptionsC = rootServiceProvider.GetRequiredService<IOptions<OptionsC>>().Value;
+            });
+
+        services.AddOptions<OptionsC>();
+    }
+
+    [Fact]
+    public async Task Should_Not_Deadlock_On_Concurrent_Instantiation()
+    {
+        var thread1 = new Thread(() =>
+        {
+            using var scope = TestServiceScope.ServiceProvider.CreateScope();
+            _ = scope.ServiceProvider.GetRequiredService<SingletonTestService>();
+        });
+
+        var thread2 = new Thread(() =>
+        {
+            using var scope = TestServiceScope.ServiceProvider.CreateScope();
+            _ = scope.ServiceProvider.GetRequiredService<IOptions<OptionsB>>().Value;
+        });
+
+        thread1.Start();
+        _optionsAReadyToContinueEvent.Wait();
+
+        thread2.Start();
+        _optionsBEvent.Wait();
+        _optionsAContinueEvent.Set();
+
+        thread1.Join();
+        thread2.Join();
+    }
+
+    private class SingletonTestService
+    {
+        private readonly OptionsA _optionsA;
+
+        public SingletonTestService(IOptions<OptionsA> optionsA)
+        {
+            _optionsA = optionsA.Value;
+        }
+    }
+
+    private class OptionsA
+    {
+        public OptionsB OptionsB { get; set; }
+    }
+
+    private class OptionsB
+    {
+        public OptionsC OptionsC { get; set; }
+    }
+
+    private class OptionsC
+    {
+
+    }
+}
