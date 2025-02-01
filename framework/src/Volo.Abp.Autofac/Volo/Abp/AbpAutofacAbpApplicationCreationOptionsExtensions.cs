@@ -1,5 +1,7 @@
 ﻿using Autofac;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Volo.Abp.Autofac;
 
 namespace Volo.Abp;
@@ -22,7 +24,14 @@ public static class AbpAutofacAbpApplicationCreationOptionsExtensions
 
         services.AddObjectAccessor(containerBuilder);
         services.AddSingleton((IServiceProviderFactory<ContainerBuilder>)factory);
+        services.ReplaceDefaultUnnamedOptionsManager();
 
         return factory;
+    }
+
+    private static void ReplaceDefaultUnnamedOptionsManager(this IServiceCollection services)
+    {
+        services.AddOptions();
+        services.Replace(ServiceDescriptor.Singleton(typeof(IOptions<>), typeof(AbpAutofacUnnamedOptionsManager<>)));
     }
 }

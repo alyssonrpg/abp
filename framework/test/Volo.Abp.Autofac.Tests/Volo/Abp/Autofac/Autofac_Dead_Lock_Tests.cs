@@ -8,18 +8,13 @@ using Xunit;
 
 namespace Volo.Abp.Autofac;
 
-public class AutoFac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
+public class Autofac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
 {
     private readonly ManualResetEventSlim _optionsAContinueEvent = new ();
 
     private readonly ManualResetEventSlim _optionsAReadyToContinueEvent = new ();
 
     private readonly ManualResetEventSlim _optionsBEvent = new ();
-
-    public AutoFac_Dead_Lock_Tests()
-    {
-
-    }
 
     protected override void SetAbpApplicationCreationOptions(AbpApplicationCreationOptions options)
     {
@@ -54,7 +49,7 @@ public class AutoFac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
     }
 
     [Fact]
-    public async Task Should_Not_Deadlock_On_Concurrent_Instantiation()
+    public async Task Should_Not_Deadlock_On_Concurrent_Dependency_Resolution()
     {
         var thread1 = new Thread(() =>
         {
@@ -75,8 +70,15 @@ public class AutoFac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
         _optionsBEvent.Wait();
         _optionsAContinueEvent.Set();
 
-        thread1.Join();
-        thread2.Join();
+        if (!thread1.Join(TimeSpan.FromSeconds(60)))
+        {
+            throw new TimeoutException("Thread1 is deadlocked");
+        }
+
+        if (!thread2.Join(TimeSpan.FromSeconds(60)))
+        {
+            throw new TimeoutException("Thread2 is deadlocked");
+        }
     }
 
     private class SingletonTestService
