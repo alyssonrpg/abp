@@ -30,13 +30,14 @@ public sealed class AbpAutofacUnnamedOptionsManager<TOptions> : IOptions<TOption
                 return value;
             }
 
-            // The following code creates a new instance of TOptions using an optimistic locking strategy
-            // rather than the pessimistic locking strategy used by the default implementation, avoiding deadlocks
+            // The following code synchronizes the concurrent creation of a new instance of TOptions without using a
+            // pessimistic lock. Instead, it employs an atomic operation to avoid deadlocks that can occur with the
+            // default UnnamedOptionsManager implementation when resolving IOptions<TOptions> with dependencies in
+            // Autofac.
 
             var newValue = _factory.Create(Microsoft.Extensions.Options.Options.DefaultName);
             var oldValue = Interlocked.CompareExchange(ref _value, newValue, null);
             return oldValue ?? newValue;
-
         }
     }
 }

@@ -48,6 +48,15 @@ public class Autofac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
         services.AddOptions<OptionsC>();
     }
 
+    /// <summary>
+    /// This test simulates a deadlock that can occur when a specific SingletonService depends on IOptions A,
+    /// which depends on another IOptions B, and B in turn depends on another IOptions C.
+    /// This mirrors the dependency chain of
+    /// AbpSystemTextJsonSerializerOptions -> AbpSystemTextJsonSerializerModifiersOptions -> AbpJsonOptions.
+    ///
+    /// The test coordinates two threads using events to ensure a repeatable deadlock scenario.
+    /// </summary>
+    /// <exception cref="TimeoutException">Thrown if a timeout occurs during the operation.</exception>
     [Fact]
     public async Task Should_Not_Deadlock_On_Concurrent_Dependency_Resolution()
     {
