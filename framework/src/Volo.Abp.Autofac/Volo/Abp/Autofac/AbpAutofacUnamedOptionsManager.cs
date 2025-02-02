@@ -4,12 +4,16 @@ using Microsoft.Extensions.Options;
 namespace Volo.Abp.Autofac;
 
 /// <summary>
-/// The <see cref="AbpAutofacUnnamedOptionsManager"/> class is intended to replace the default
+/// The <see cref="AbpAutofacUnnamedOptionsManager"/> class is designed to replace the default
 /// <see cref="Microsoft.Extensions.Options.UnnamedOptionsManager"/> in Microsoft.Extensions.Options.
-/// The default implementation leads to deadlocks with Autofac when resolving <see cref="IOptions{TOptions}"/>
-/// that have dependencies resolved by Autofac.
+/// The default implementation can lead to deadlocks with Autofac when resolving <see cref="IOptions{TOptions}"/>
+/// that have dependencies managed by Autofac.
+///
+/// Deadlocks occur in the following scenarios due to a lack of ordering in lock acquisition:
+///     * "Microsoft.Extensions.Options.UnnamedOptionsManager.get_Value" locking "_syncObj".
+///     * "Autofac.Core.Lifetime.LifetimeScope.CreateSharedInstance" locking "_synchRoot".
 /// </summary>
-/// <typeparam name="TOptions">Specifies the type of options being managed.</typeparam>
+/// <typeparam name="TOptions">The type of options being managed.</typeparam>
 public sealed class AbpAutofacUnnamedOptionsManager<TOptions> : IOptions<TOptions>
     where TOptions : class
 {

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Shouldly;
 using Volo.Abp.Testing;
 using Xunit;
 
@@ -10,9 +11,9 @@ namespace Volo.Abp.Autofac;
 
 public class Autofac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
 {
-    private readonly ManualResetEventSlim _optionsAContinueEvent = new ();
-
     private readonly ManualResetEventSlim _optionsAReadyToContinueEvent = new ();
+
+    private readonly ManualResetEventSlim _optionsAContinueEvent = new ();
 
     private readonly ManualResetEventSlim _optionsBEvent = new ();
 
@@ -49,17 +50,20 @@ public class Autofac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
     }
 
     /// <summary>
-    /// This test simulates a deadlock that can occur when a specific SingletonService depends on IOptions A,
-    /// which depends on another IOptions B, and B in turn depends on another IOptions C.
-    /// This mirrors the dependency chain of
+    /// This test simulates a deadlock scenario that can occur when a specific SingletonService depends on IOptions A,
+    /// which in turn depends on IOptions B, and B depends on IOptions C.
+    /// This mirrors the dependency chain of:
     /// AbpSystemTextJsonSerializerOptions -> AbpSystemTextJsonSerializerModifiersOptions -> AbpJsonOptions.
     ///
-    /// The test coordinates two threads using events to ensure a repeatable deadlock scenario.
+    /// The test coordinates two threads using events to ensure a reproducible deadlock situation.
+    ///
+    /// For more details, see the commentary in <see cref="AbpAutofacUnnamedOptionsManager{TOptions}"/>.
     /// </summary>
     /// <exception cref="TimeoutException">Thrown if a timeout occurs during the operation.</exception>
     [Fact]
     public async Task Should_Not_Deadlock_On_Concurrent_Dependency_Resolution()
     {
+        // Arrange
         var thread1 = new Thread(() =>
         {
             using var scope = TestServiceScope.ServiceProvider.CreateScope();
@@ -72,6 +76,7 @@ public class Autofac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
             _ = scope.ServiceProvider.GetRequiredService<IOptions<OptionsB>>().Value;
         });
 
+        // Act
         thread1.Start();
         _optionsAReadyToContinueEvent.Wait();
 
@@ -79,15 +84,9 @@ public class Autofac_Dead_Lock_Tests : AbpIntegratedTest<AutofacTestModule>
         _optionsBEvent.Wait();
         _optionsAContinueEvent.Set();
 
-        if (!thread1.Join(TimeSpan.FromSeconds(60)))
-        {
-            throw new TimeoutException("Thread1 is deadlocked");
-        }
-
-        if (!thread2.Join(TimeSpan.FromSeconds(60)))
-        {
-            throw new TimeoutException("Thread2 is deadlocked");
-        }
+        // Assert
+        thread1.Join(TimeSpan.FromSeconds(60)).ShouldBeTrue("Thread 1 is deadlocked");
+        thread2.Join(TimeSpan.FromSeconds(60)).ShouldBeTrue("Thread 2 is deadlocked");
     }
 
     private class SingletonTestService

@@ -24,14 +24,13 @@ public static class AbpAutofacAbpApplicationCreationOptionsExtensions
 
         services.AddObjectAccessor(containerBuilder);
         services.AddSingleton((IServiceProviderFactory<ContainerBuilder>)factory);
-        services.ReplaceDefaultUnnamedOptionsManager();
+        services.AddAbpAutofacUnnamedOptionsManager();
 
         return factory;
     }
 
-    private static void ReplaceDefaultUnnamedOptionsManager(this IServiceCollection services)
+    internal static void AddAbpAutofacUnnamedOptionsManager(this IServiceCollection services)
     {
-        services.AddOptions();
         services.Replace(ServiceDescriptor.Singleton(typeof(IOptions<>), typeof(AbpAutofacUnnamedOptionsManager<>)));
     }
 }
